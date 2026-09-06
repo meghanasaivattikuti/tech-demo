@@ -4,7 +4,7 @@ A small Next.js app on Vercel demonstrating a modernized architecture for a Publ
 
 All data in this repo is fictional, and this project is not affiliated with or endorsed by any real organization.
 
-**Live demo:** _TODO - add the deployed Vercel URL here_
+**Live demo:** https://tech-demo-inky.vercel.app
 
 See [SUBMISSION.md](./SUBMISSION.md) for the problem statement, architecture, Vercel primitive choices, rollout plan, success measures, and known limitations.
 

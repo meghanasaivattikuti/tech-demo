@@ -50,9 +50,3 @@ BUILD-NOTES.md
 BUILD-NOTES.html
 BUILD-NOTES.pdf
 db/rds-ca-bundle.pem
-
-# TEMPORARY: excluded only until the real deployed URL and repo link are
-# filled into section 4 (right now it still has TODO placeholders). Remove
-# this line and commit SUBMISSION.md for real once that's done - it is the
-# actual customer-facing deliverable and must end up in the public repo.
-SUBMISSION.md

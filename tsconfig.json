@@ -6,6 +6,10 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // tests/ import the module under test with an explicit .ts extension,
+    // because node's test runner resolves real paths at runtime. Allowed
+    // here since noEmit is set - tsc only type-checks this project.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

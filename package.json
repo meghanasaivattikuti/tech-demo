@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"tests/**/*.test.ts\"",
     "db:migrate": "node db/migrate.mjs",
     "eval:search": "node scripts/eval-search.mjs"
   },

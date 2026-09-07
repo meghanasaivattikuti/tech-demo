@@ -106,13 +106,15 @@ const PREDICATES: Array<{
   field: keyof SearchFilters;
   column: string;
   match: "exact" | "contains";
+  columnType: SqlParamType;
 }> = [
-  { field: "name", column: "name", match: "contains" },
-  { field: "city", column: "city", match: "contains" },
-  { field: "state", column: "state", match: "exact" },
-  { field: "sportAffiliation", column: "sport_affiliation", match: "contains" },
-  { field: "misconductKeyword", column: "misconduct", match: "contains" },
-  { field: "actionKeyword", column: "action_taken", match: "contains" },
+  { field: "name", column: "name", match: "contains", columnType: "nvarchar" },
+  { field: "city", column: "city", match: "contains", columnType: "nvarchar" },
+  // state is CHAR(2), not NVARCHAR - the only column here that isn't
+  { field: "state", column: "state", match: "exact", columnType: "char2" },
+  { field: "sportAffiliation", column: "sport_affiliation", match: "contains", columnType: "nvarchar" },
+  { field: "misconductKeyword", column: "misconduct", match: "contains", columnType: "nvarchar" },
+  { field: "actionKeyword", column: "action_taken", match: "contains", columnType: "nvarchar" },
 ];
 
 // T-SQL LIKE rules, not MySQL's - two differences that would've been
@@ -125,7 +127,11 @@ function likeValue(value: string): string {
   return `%${escaped}%`;
 }
 
-export type SqlParam = { name: string; value: string };
+// the declared type of the column a predicate binds against, so the
+// parameter can be bound to match it. see db/schema.sql for the declarations
+export type SqlParamType = "char2" | "nvarchar";
+
+export type SqlParam = { name: string; value: string; type: SqlParamType };
 
 // everything goes through a placeholder, nothing model-supplied ever
 // touches the SQL text directly - the model can only choose which known
@@ -137,7 +143,7 @@ export function buildSearchPredicate(filters: SearchFilters): {
   const clauses: string[] = [];
   const params: SqlParam[] = [];
 
-  for (const { field, column, match } of PREDICATES) {
+  for (const { field, column, match, columnType } of PREDICATES) {
     const value = filters[field];
     if (!value) continue;
 
@@ -145,10 +151,10 @@ export function buildSearchPredicate(filters: SearchFilters): {
 
     if (match === "exact") {
       clauses.push(`${column} = @${name}`);
-      params.push({ name, value: value.trim().toUpperCase() });
+      params.push({ name, value: value.trim().toUpperCase(), type: columnType });
     } else {
       clauses.push(`${column} LIKE @${name} ESCAPE '\\'`);
-      params.push({ name, value: likeValue(value) });
+      params.push({ name, value: likeValue(value), type: columnType });
     }
   }
 

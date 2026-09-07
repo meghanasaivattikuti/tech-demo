@@ -186,10 +186,19 @@ export async function searchRecords(filters: SearchFilters): Promise<PDDRecord[]
   const connection = await pool();
   const request = connection.request();
 
-  // NVarChar, not VarChar - binding as VarChar forces a collation coercion
-  // on the NVARCHAR columns and can quietly kill the index on state
+  // bind each parameter as the type its column is actually declared as.
+  // state is CHAR(2) (db/schema.sql), and NVARCHAR outranks CHAR in T-SQL
+  // datatype precedence, so binding NVarChar here would put the implicit
+  // conversion on the *column* rather than the parameter. that defeats
+  // IX_pdd_records_state, and under a SQL_ collation (which this schema
+  // pins) SQL Server can't recover it with a range seek either. the
+  // NVARCHAR columns are bound NVarChar for the same reason, in reverse.
   for (const param of params) {
-    request.input(param.name, sql.NVarChar(256), param.value);
+    request.input(
+      param.name,
+      param.type === "char2" ? sql.Char(2) : sql.NVarChar(256),
+      param.value,
+    );
   }
 
   const result = await request.query<PDDRow>(

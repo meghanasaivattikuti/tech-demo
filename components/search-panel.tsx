@@ -60,6 +60,25 @@ export function SearchPanel() {
   const [log, setLog] = useState<LogEntry[]>([]);
   const [showTrace, setShowTrace] = useState(false);
 
+  // results are swapped in by a fetch, which produces no announcement at
+  // all for a screen reader - the count and the safety block would both
+  // land silently. the error path already has role="alert"; this covers
+  // the success path, which is the one that actually changes the answer
+  const statusMessage = isSearching
+    ? "Searching."
+    : result === null
+      ? ""
+      : [
+          `${result.results.length} matching ${
+            result.results.length === 1 ? "record" : "records"
+          }.`,
+          result.blocked.length > 0
+            ? "A filter was removed by the minor-context safety rule."
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+
   async function runSearch(rawQuery: string) {
     const trimmed = rawQuery.trim();
     if (trimmed.length === 0 || isSearching) return;
@@ -153,6 +172,10 @@ export function SearchPanel() {
               {error}
             </p>
           )}
+
+          <p role="status" aria-live="polite" className="sr-only">
+            {statusMessage}
+          </p>
         </CardContent>
       </Card>
 

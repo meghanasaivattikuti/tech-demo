@@ -447,13 +447,14 @@ the real provisioned database and AI Gateway rather than against assumptions.
 For validating the AI behavior specifically, `scripts/eval-search.mjs`
 (`npm run eval:search`) exercises the live endpoint end to end: the real model
 call through Gateway, the safety filter, and a real query against RDS. Ten
-cases, each testing something the others don't. The eight not already shown in
-the demo table above:
+cases, each testing something the others don't:
 
 | What it checks | Example |
 |---|---|
 | Multi-field extraction | "wrestling coaches in Wyoming" resolves to `state: WY, sportAffiliation: USA Wrestling`, with "coaches" dropped |
 | Case-insensitivity | The same query in all lowercase resolves identically |
+| A full state name resolved to its code | "sanctions in California" resolves to `state: CA`, the value actually stored |
+| Eligibility asked as a question | "who's ineligible in Colorado" resolves to the Action Taken field |
 | A second action category | "who's suspended in Vermont" |
 | Correct resolution, zero results | "coaches banned in Oregon": both fields resolve, and the query isn't loosened to force a match the data doesn't have |
 | Correct resolution, no seeded data | "who's ineligible in Ohio", a state with no records at all |

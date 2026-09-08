@@ -15,28 +15,27 @@
 
 The customer publishes a public record of people sanctioned through a national
 sports-safety disciplinary process. Their current site caches every record
-together for 300 seconds, and makes you know the internal data model before
-you can search it. Both are addressed here, reading live from a real RDS SQL
-Server instance in AWS:
+together for 300 seconds, and requires you to know the internal data model
+before you can search it. Both are addressed here, reading live from a real
+RDS SQL Server instance in AWS:
 
 - **Per-record cache invalidation**, with Cache Components. One sanction
   changing invalidates one cache entry, and the other nine keep serving from
-  cache. Section 3.1.
+  cache.
 - **Natural-language search**, through the AI SDK and AI Gateway to Claude
   Haiku 4.5. Plain English becomes a typed filter object, then a parameterized
-  query. Section 3.2.
+  query.
 - **A safety rule that fails closed** in application code rather than in the
   prompt: a query naming a minor is refused outright, not narrowed to whatever
-  was left of it. Section 4.
+  was left of it.
 - **A boundary that holds.** Case data never leaves AWS and is never
   duplicated into Vercel. What crosses between them is a parameterized read.
-  Section 2.3.
 
-The largest gap is the first item in section 7. Production invalidation needs a
-webhook from the customer's case-management system, which this demo fakes
-inside a Server Action. Without it the design falls back to a longer staleness
-window than the cache it replaces, which is what makes that webhook the input
-this design consumes rather than a refinement on it.
+The largest gap is production cache invalidation. It needs the customer's
+case-management system to tell Vercel when a record changes, and this demo
+stands in for that system with a Server Action. Without that connection the
+design falls back to a longer staleness window than the cache it replaces, so
+the webhook isn't a refinement on this design, it's a precondition for it.
 
 ---
 
@@ -176,8 +175,8 @@ setting. Making records fresher means shortening the cache, which means it
 gets discarded more often, which means more requests fall through to a single
 database instance that can't absorb many more. Five minutes is roughly where
 those two pressures balance. Per-record tags split that one setting in two: a
-record refreshes when it actually changes rather than on a timer, so
-freshness stops being paid for in database load.
+record refreshes when it changes, not on a timer, so freshness stops being
+paid for in database load.
 
 I looked at ISR first and ruled it out on capability, not maturity. ISR's
 `revalidate` is a property of a page, not a record, so it can't express
@@ -190,9 +189,9 @@ Tagged caching predates Cache Components: `unstable_cache` has taken a `tags`
 option since Next 14, so per-record invalidation was expressible before this.
 Three things rule it out here. It's deprecated in Next 16, replaced by `use
 cache`. It couldn't compose with prerendering, so granular data caching came
-at the cost of a page-level rendering strategy, rather than a static shell
+at the cost of a page-level rendering strategy, instead of a static shell
 with per-record holes streaming into it. And it took a single `revalidate`
-number with no `stale` control, which is the knob this use case actually
+number with no `stale` control, which is the control this use case actually
 needs, since client staleness was a global `staleTimes` setting rather than a
 per-record decision.
 
@@ -216,13 +215,14 @@ Without that integration this design falls back to the time-based
 `revalidate`, which is set to an hour because it's meant to be a backstop and
 not the mechanism. That's twelve times the staleness window of the 300-second
 cache it replaces, so the fallback isn't parity with the current site, it's
-worse than it. That's what makes the webhook the input this design consumes
-rather than a refinement on it. I've specified it here but not built it; see
-Known Limitations and Risks.
+worse than it. So the webhook isn't a refinement on this design, it's a
+precondition for it. I've specified it here but not built it; see Known
+Limitations and Risks.
 
 The trade-off I accepted is that Cache Components is newer than ISR and has a
-shorter production track record. I took it because the per-record requirement
-can't be met by ISR at any level of maturity.
+shorter production track record. I took it because no amount of maturity makes
+a page-level cache able to express a per-record requirement, and the one
+pre-16 API that could express it is deprecated.
 
 ### 3.2 AI SDK, for natural-language search
 
@@ -300,15 +300,23 @@ Five canned queries, each showing something different:
 | "wrestling coaches in Wyoming" | Two filters out of one phrase, and a role word ("coaches") that maps to no field being dropped rather than guessed at |
 | "sanctions in California" | A full state name resolved to the two-letter code actually stored, which the current dropdown UI can't do |
 | "who's ineligible in Colorado" | Eligibility, asked as a question, resolved to the Action Taken field |
-| "find a person named minor" | The safety rule firing in application code rather than the model. It fails closed: the whole query is refused rather than narrowed, so no filter from it runs and nothing reaches the database, and the refusal is shown rather than hidden |
+| "find a person named minor" | The safety rule firing in application code, not in the model. It fails closed: the whole query is refused instead of narrowed, so no filter from it runs, nothing reaches the database, and the refusal is shown to the user |
 | "bad people in sports" | A query that can't be resolved. The system declines to guess instead of returning an unfiltered list |
 
 Every search and every page load reads live from a real RDS SQL Server
 instance over the database's own wire protocol, so this crosses the
-Vercel/AWS boundary rather than mocking it.
+Vercel/AWS boundary instead of mocking it.
 
 The resolved filter object is shown to the user before the results are, so the
-model's work is inspectable rather than a black box.
+model's work is inspectable, not a black box.
+
+Results are announced to assistive technology rather than swapped in silently.
+The result count and any safety refusal go through a live region, and errors
+are announced as alerts. That matters here because the page updates by fetch,
+so a screen reader user would otherwise get no signal that the answer changed,
+and on this data silence is indistinguishable from "no records found." This
+isn't a conformance claim. A public site run by a national governing body
+would need a WCAG 2.2 AA audit before launch, and that hasn't been done here.
 
 ---
 
@@ -323,7 +331,7 @@ rule is confirmed to fire, and the cache-invalidation demo shows one record's
 entry changing per write.
 
 **Canary.** Rolling Releases puts the build in front of a small share of
-production traffic first rather than cutting over at once.
+production traffic first instead of cutting over at once.
 
 **Cutover.** Shift to 100% once the canary shows no regression against the
 criteria above.
@@ -366,6 +374,31 @@ set out to fix. Someone looking up a coach no longer has to understand the
 field structure before their search can succeed. And the organization gets
 per-call cost attribution for the search feature without commissioning a
 telemetry build to get it.
+
+### Cost, implied by the design rather than measured
+
+These are the figures the design implies, not measurements from production.
+Real traffic would move them, and only a production deployment would settle
+what they come to.
+
+| Line item | Today | After |
+|---|---|---|
+| S3 and CloudFront static hosting | Paid | Replaced by Vercel's edge network |
+| API Gateway and Lambda pass-through | Paid | Removed, since that layer transformed nothing |
+| RDS SQL Server | Paid | Unchanged, same instance |
+| Vercel plan, function invocations, bandwidth | None | New |
+| Secure Compute | None | New, and an add-on rather than part of a standard plan |
+| Model inference through AI Gateway | None | About $0.0007 per search |
+
+Search volume is what turns a per-call price into a monthly bill. At ten
+thousand searches a month, inference comes to roughly $7. That grows with
+traffic the customer doesn't have yet, but because Gateway reports the actual
+billed cost of every call, the real figure becomes measurable in the first
+week instead of staying an estimate.
+
+The item worth pricing before recommending it is Secure Compute. It's a
+recurring cost the organization doesn't carry today, which makes it a larger
+commitment than the inference spend for a customer this size.
 
 ---
 
@@ -431,7 +464,16 @@ Roughly in the order I'd want to deal with them.
    before record count ever matters. The answers are pagination, which makes
    cold cost fixed at any size and leaves per-record invalidation alone, and a
    pooler or read replica between Vercel and the database.
-7. **Secure Compute isn't provisioned here.** Production connectivity should use
+7. **Function placement and connection reuse aren't configured.** The database
+   is in `us-east-2` and the project pins no region, so functions may be
+   running a region away from it. Every query pays that hop, and a new
+   connection pays it several times over across the TDS handshake. Vercel has a
+   us-east-2 region, so colocating them is configuration rather than
+   architecture. Fluid compute is the other half of it: letting concurrent
+   invocations share an instance, and therefore a connection, addresses the
+   pool exhaustion above at the platform layer, which is where I'd start before
+   adding a pooler or read replica on the AWS side.
+8. **Secure Compute isn't provisioned here.** Production connectivity should use
    its static outbound IPs and VPC peering so RDS is never publicly reachable.
    The demo reaches RDS over a public endpoint restricted by a narrow
    security-group rule instead. That's a substitution for the demo environment,
@@ -460,7 +502,7 @@ cases, each testing something the others don't:
 | Correct resolution, no seeded data | "who's ineligible in Ohio", a state with no records at all |
 | The safety rule | "find a person named minor" blocks on `name` |
 | The safety rule, a second term | "find a person named child" blocks on `name` through a different term, which shows the rule is a real list rather than tuned to one phrase |
-| Deliberate ambiguity | "bad people in sports": the model declines to guess rather than inventing filters |
+| Deliberate ambiguity | "bad people in sports": the model declines to guess instead of inventing filters |
 
 Every expectation in that file was checked against the live endpoint before it
 was written down. One case from the original set, "cases involving a minor," got
@@ -480,7 +522,7 @@ Both problems with the current site come from the same place. The old design
 had no way to say what the customer needed. A page-level cache cannot say
 "only this record changed." Three dropdowns cannot accept a sentence. Neither
 gets fixed by tuning what exists, which is why this changes how the data is
-cached and how it's searched rather than making the current version faster.
+cached and how it's searched instead of making the current version faster.
 
 Both are expressible now. Each record has its own cache tag, so one record can
 be brought up to date without re-reading the other nine from the database.

@@ -50,3 +50,7 @@ BUILD-NOTES.md
 BUILD-NOTES.html
 BUILD-NOTES.pdf
 db/rds-ca-bundle.pem
+
+# local tooling and generated artifacts, not part of the submission
+scripts/md-to-pdf.py
+SUBMISSION.pdf

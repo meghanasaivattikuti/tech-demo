@@ -10,8 +10,8 @@
 
 ## Summary
 
-**Live demo:** https://tech-demo-inky.vercel.app
-**Repository:** https://github.com/meghanasaivattikuti/tech-demo
+- **Live demo:** https://tech-demo-inky.vercel.app
+- **Repository:** https://github.com/meghanasaivattikuti/tech-demo
 
 The customer publishes a public record of people sanctioned through a national
 sports-safety disciplinary process. Their current site caches every record
@@ -287,8 +287,8 @@ publicly reachable. Not provisioned here; see Known Limitations and Risks.
 
 ## 4. Working Demo
 
-**Live:** https://tech-demo-inky.vercel.app
-**Repository:** https://github.com/meghanasaivattikuti/tech-demo
+- **Live:** https://tech-demo-inky.vercel.app
+- **Repository:** https://github.com/meghanasaivattikuti/tech-demo
 
 No authentication. The page and search are open, and the simulated
 case-update control is public and scoped on purpose so it can be tried

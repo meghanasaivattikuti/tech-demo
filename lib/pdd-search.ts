@@ -77,27 +77,32 @@ function referencesMinor(value: string): boolean {
 // state/city/sport/action are all controlled values
 const MINOR_CHECKED_FIELDS = ["name", "misconductKeyword"] as const;
 
+// fails closed: one blocked field refuses the whole query rather than
+// dropping that field and running the rest. dropping is worse than useless
+// here, because "named minor in Wyoming" would come back as every record in
+// Wyoming, which is broader than what was asked for and still looks like an
+// answer to the question that was typed
 export function applyMinorContextSafetyFilter(filters: SearchFilters): {
   safeFilters: SearchFilters;
   blocked: BlockedFilter[];
 } {
-  const safeFilters: SearchFilters = { ...filters };
   const blocked: BlockedFilter[] = [];
 
   for (const field of MINOR_CHECKED_FIELDS) {
-    const value = safeFilters[field];
+    const value = filters[field];
     if (value && referencesMinor(value)) {
       blocked.push({
         field,
         value,
         reason:
-          "The PDD publishes adult subjects only. A minor referenced as context inside a record cannot be used as a search target.",
+          "The PDD publishes adult subjects only. A minor referenced as context inside a record cannot be used as a search target, so the search was refused rather than narrowed.",
       });
-      delete safeFilters[field];
     }
   }
 
-  return { safeFilters, blocked };
+  // no filters at all when refused, so hasAnyFilter is false and the query
+  // never reaches the database
+  return { safeFilters: blocked.length > 0 ? {} : { ...filters }, blocked };
 }
 
 // the allowlist - additional_details isn't in here so it just can't be

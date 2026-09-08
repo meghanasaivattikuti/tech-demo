@@ -15,16 +15,27 @@ import { searchRecords } from "@/lib/db";
 import type { CostSource, SearchResponse, SearchTrace } from "@/lib/search-types";
 
 // one query in, one structured filter out, then a parameterized SQL query.
-// no Eve/Workflows here - there's no conversation to maintain and no
-// durability need for a call this short, so either would just be paying
-// for machinery this doesn't need. the model only ever translates text to
-// a filter object, it never sees records or writes SQL itself
+// no Workflows here - there's no conversation to maintain and no durability
+// need for a call this short, so it would just be paying for machinery this
+// doesn't need. the model only ever translates text to a filter object, it
+// never sees records or writes SQL itself
 
 // provider-prefixed string routes through AI Gateway instead of a provider
 // SDK directly, which is what gets us failover + per-call cost tracking.
 // haiku over a bigger model since this is closed-form extraction against a
 // small known field set, not worth paying for more reasoning than that
 const MODEL = "anthropic/claude-haiku-4-5";
+
+// the endpoint is public and unauthenticated, and every call spends money at
+// the model, so the input needs a ceiling. 200 characters is more than any
+// plain-language search over six fields needs, and it bounds what a single
+// request can cost
+const MAX_QUERY_LENGTH = 200;
+
+// measured calls land at 1.0-1.3s, so this is a ceiling for a hung provider
+// rather than a normal-path limit. without it a stalled call holds the
+// function open for the platform's whole timeout and gets billed for it
+const MODEL_TIMEOUT_MS = 10_000;
 
 // published haiku 4.5 rates, used only when Gateway doesn't return a cost
 // for the call itself
@@ -131,6 +142,22 @@ export async function POST(request: Request) {
 
   const trimmedQuery = query.trim();
 
+  if (trimmedQuery.length > MAX_QUERY_LENGTH) {
+    logSearch({
+      outcome: "bad_request",
+      requestId,
+      latencyMs: Date.now() - startedAt,
+      queryLength: trimmedQuery.length,
+      reason: "query over length cap",
+    });
+    return Response.json(
+      { error: `A search query can be at most ${MAX_QUERY_LENGTH} characters.` },
+      { status: 400 },
+    );
+  }
+
+  const modelTimeout = AbortSignal.timeout(MODEL_TIMEOUT_MS);
+
   let resolvedFilters: SearchFilters;
   let trace: SearchTrace;
 
@@ -142,6 +169,7 @@ export async function POST(request: Request) {
     const { output, usage, finalStep } = await generateText({
       model: MODEL,
       output: Output.object({ schema: searchFilterSchema }),
+      abortSignal: modelTimeout,
       // without the known-value hints the model has no way to know sport
       // affiliation is stored as "USA Wrestling" not "wrestling"
       prompt: `Extract PDD search filters from this query: "${trimmedQuery}"
@@ -190,6 +218,23 @@ Only populate a field if the query actually implies it. Leave a field out rather
     // likely one here); NoOutputGeneratedError is the separate case of no
     // output at all. catching only the latter left this branch unreachable
     // for the failure that actually happens, and 500'd instead.
+    // checked on the signal, not the error class, since an abort surfaces
+    // under more than one name depending on where it was raised
+    if (modelTimeout.aborted) {
+      logSearch({
+        outcome: "error",
+        requestId,
+        latencyMs: Date.now() - startedAt,
+        queryLength: trimmedQuery.length,
+        model: MODEL,
+        reason: "model_timeout",
+      });
+      return Response.json(
+        { error: "The search service took too long to respond. Try again." },
+        { status: 504 },
+      );
+    }
+
     if (
       NoObjectGeneratedError.isInstance(error) ||
       NoOutputGeneratedError.isInstance(error)
@@ -221,10 +266,13 @@ Only populate a field if the query actually implies it. Leave a field out rather
     throw error;
   }
 
+  // fails closed: a blocked field clears every filter, so a refused query
+  // reaches hasAnyFilter with nothing and never touches the database
   const { safeFilters, blocked } = applyMinorContextSafetyFilter(resolvedFilters);
 
-  // nothing left after the safety filter means the query didn't resolve to
-  // anything this data set answers - return nothing, not everything
+  // nothing left after the safety filter means the query was either refused
+  // or didn't resolve to anything this data set answers - return nothing, not
+  // everything
   const results = hasAnyFilter(safeFilters) ? await searchRecords(safeFilters) : [];
 
   const body: SearchResponse = {

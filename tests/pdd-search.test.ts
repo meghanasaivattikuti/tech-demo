@@ -137,19 +137,19 @@ describe("applyMinorContextSafetyFilter", () => {
     }
   });
 
-  test("sibling filters survive a block", () => {
-    // This is the known limitation in SUBMISSION.md 7.3, pinned as a test so
-    // that a future change to fail-closed behaviour shows up here as a
-    // deliberate break rather than passing silently.
+  test("a block refuses the whole query, siblings included", () => {
+    // fail-closed. dropping only the blocked field would have run
+    // state=WY AND sport=USA Wrestling on its own, returning every wrestling
+    // record in Wyoming: broader than what was asked for, and still shaped
+    // like an answer to the question that was typed
     const { safeFilters, blocked } = applyMinorContextSafetyFilter({
       name: "minor",
       state: "WY",
       sportAffiliation: "USA Wrestling",
     });
     assert.equal(blocked.length, 1);
-    assert.equal(safeFilters.name, undefined);
-    assert.equal(safeFilters.state, "WY");
-    assert.equal(safeFilters.sportAffiliation, "USA Wrestling");
+    assert.deepEqual(safeFilters, {});
+    assert.equal(hasAnyFilter(safeFilters), false);
   });
 
   test("a blocked entry carries the field, the value and a reason", () => {
@@ -322,7 +322,7 @@ describe("hasAnyFilter", () => {
 });
 
 describe("the safety filter and the predicate builder together", () => {
-  test("a blocked term cannot reach the SQL, but its siblings can", () => {
+  test("a blocked term takes its siblings out of the SQL with it", () => {
     // the actual invariant the route handler depends on
     const fromModel: SearchFilters = {
       name: "minor",
@@ -332,9 +332,8 @@ describe("the safety filter and the predicate builder together", () => {
     const { sql, params } = buildSearchPredicate(safeFilters);
 
     assert.equal(blocked.length, 1);
-    assert.equal(sql, "WHERE state = @p0");
-    assert.equal(params.length, 1);
-    assert.ok(!params.some((p) => p.value.includes("minor")));
+    assert.equal(sql, "");
+    assert.equal(params.length, 0);
   });
 
   test("when the block empties the filters, nothing queryable is left", () => {

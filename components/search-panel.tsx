@@ -64,20 +64,18 @@ export function SearchPanel() {
   // all for a screen reader - the count and the safety block would both
   // land silently. the error path already has role="alert"; this covers
   // the success path, which is the one that actually changes the answer
+  // a refused search announces the refusal instead of a count. "0 matching
+  // records" would read as nobody matched, which on this data is the one
+  // impression an unanswered query must never leave
   const statusMessage = isSearching
     ? "Searching."
     : result === null
       ? ""
-      : [
-          `${result.results.length} matching ${
+      : result.blocked.length > 0
+        ? "Search refused by the minor-context safety rule. No records were searched."
+        : `${result.results.length} matching ${
             result.results.length === 1 ? "record" : "records"
-          }.`,
-          result.blocked.length > 0
-            ? "A filter was removed by the minor-context safety rule."
-            : "",
-        ]
-          .filter(Boolean)
-          .join(" ");
+          }.`;
 
   async function runSearch(rawQuery: string) {
     const trimmed = rawQuery.trim();
@@ -224,29 +222,30 @@ function ResolvedQuery({ result }: { result: SearchResponse }) {
               </Badge>
             ))}
           </div>
-        ) : (
+        ) : result.blocked.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No filters were extracted. The query did not resolve to any field in this
             data set, so no records were returned. Nothing is shown rather than
             everything, because an unfiltered list would look like an answer.
           </p>
-        )}
+        ) : null}
 
         {result.blocked.length > 0 && (
           <div className="space-y-2 rounded-md border border-warning/40 bg-warning/10 p-3">
             <p className="text-sm font-medium text-warning">
-              Blocked by the minor-context safety rule
+              Search refused by the minor-context safety rule
             </p>
             {result.blocked.map((blocked) => (
               <p key={blocked.field} className="text-sm text-muted-foreground">
-                Dropped <span className="font-mono">{blocked.field}</span> ={" "}
+                Refused on <span className="font-mono">{blocked.field}</span> ={" "}
                 <span className="font-mono">&ldquo;{blocked.value}&rdquo;</span>.{" "}
                 {blocked.reason}
               </p>
             ))}
             <p className="text-xs text-muted-foreground">
               Enforced in application code before the query was built, not by asking the
-              model to decline.
+              model to decline. The rule fails closed, so no filter from this query ran
+              and nothing reached the database.
             </p>
           </div>
         )}

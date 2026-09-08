@@ -75,6 +75,11 @@ search instead of siloed dropdowns.
 
 ## 2. Architecture
 
+The change is narrower than it looks. The case data stays in AWS, on the same
+database instance it lives on today. What moves to Vercel is everything in
+front of it: rendering the page, deciding what's cached, and turning a search
+phrase into a query.
+
 ### 2.1 Current state
 
 ```
@@ -178,51 +183,52 @@ those two pressures balance. Per-record tags split that one setting in two: a
 record refreshes when it changes, not on a timer, so freshness stops being
 paid for in database load.
 
-I looked at ISR first and ruled it out on capability, not maturity. ISR's
-`revalidate` is a property of a page, not a record, so it can't express
-per-record invalidation at all. Building on it would have moved the bug rather
-than fixed it. With Cache Components each record is its own cache entry under
-its own tag, so one sanction changing invalidates one entry and the rest keep
-serving.
+**Why not ISR.** I looked at it first and ruled it out on capability, not
+maturity. ISR's `revalidate` is a property of a page, not a record, so it
+can't express per-record invalidation at all. Building on it would have moved
+the bug rather than fixed it. With Cache Components each record is its own
+cache entry under its own tag, so one sanction changing invalidates one entry
+and the rest keep serving.
 
-Tagged caching predates Cache Components: `unstable_cache` has taken a `tags`
-option since Next 14, so per-record invalidation was expressible before this.
-Three things rule it out here. It's deprecated in Next 16, replaced by `use
-cache`. It couldn't compose with prerendering, so granular data caching came
-at the cost of a page-level rendering strategy, instead of a static shell
-with per-record holes streaming into it. And it took a single `revalidate`
-number with no `stale` control, which is the control this use case actually
-needs, since client staleness was a global `staleTimes` setting rather than a
-per-record decision.
+**Why not `unstable_cache` with tags.** Tagged caching predates Cache
+Components: `unstable_cache` has taken a `tags` option since Next 14, so
+per-record invalidation was expressible before this. Three things rule it out
+here. It's deprecated in Next 16, replaced by `use cache`. It couldn't compose
+with prerendering, so granular data caching came at the cost of a page-level
+rendering strategy, instead of a static shell with per-record holes streaming
+into it. And it took a single `revalidate` number with no `stale` control,
+which is the control this use case actually needs, since client staleness was
+a global `staleTimes` setting rather than a per-record decision.
 
 One wrinkle in the per-record model: tags can't discover rows that don't exist
-yet, so adding or removing a record has to invalidate a second tag covering the
-id list. The cost is one query, and every record entry stays intact.
+yet, so adding or removing a record has to invalidate a second tag covering
+the id list. The cost is one query, and every record entry stays intact.
 
-In this demo the write and the `updateTag` call happen in the same Server
-Action, which is tidy but not how production works. There, the write starts in
-the customer's case-management system, which has no path into this app. That
-system has to tell Vercel something changed. The mechanism is a signed webhook
-calling `revalidateTag(recordTag(id), { expire: 0 })`, with the `updated_at`
-column (already maintained by an `AFTER UPDATE` trigger) as a reconciler
-signal for anything missed. Two details in that call. It can't be
-the demo's `updateTag`, which throws outside a Server Action, and the profile
-is `{ expire: 0 }` rather than the generally recommended `max` because
-stale-while-revalidate would keep serving the superseded sanction while the
-refresh ran, which is the staleness this whole design exists to remove.
+**What production needs that this demo stands in for.** Here the write and the
+`updateTag` call happen in the same Server Action, which is tidy but not how
+production works. In production the write starts in the customer's
+case-management system, which has no path into this app, so that system has to
+tell Vercel something changed. The mechanism is a signed webhook calling
+`revalidateTag(recordTag(id), { expire: 0 })`, with the `updated_at` column
+(already maintained by an `AFTER UPDATE` trigger) as a reconciler signal for
+anything missed. Two details in that call. It can't be the demo's `updateTag`,
+which throws outside a Server Action, and the profile is `{ expire: 0 }`
+rather than the generally recommended `max`, because stale-while-revalidate
+would keep serving the superseded sanction while the refresh ran, which is the
+staleness this whole design exists to remove.
 
-Without that integration this design falls back to the time-based
+**What happens without it.** The design falls back to the time-based
 `revalidate`, which is set to an hour because it's meant to be a backstop and
 not the mechanism. That's twelve times the staleness window of the 300-second
 cache it replaces, so the fallback isn't parity with the current site, it's
-worse than it. So the webhook isn't a refinement on this design, it's a
+worse than it. The webhook isn't a refinement on this design, it's a
 precondition for it. I've specified it here but not built it; see Known
 Limitations and Risks.
 
-The trade-off I accepted is that Cache Components is newer than ISR and has a
-shorter production track record. I took it because no amount of maturity makes
-a page-level cache able to express a per-record requirement, and the one
-pre-16 API that could express it is deprecated.
+**The trade-off.** Cache Components is newer than ISR and has a shorter
+production track record. I took it because no amount of maturity makes a
+page-level cache able to express a per-record requirement, and the one pre-16
+API that could express it is deprecated.
 
 ### 3.2 AI SDK, for natural-language search
 
@@ -358,8 +364,9 @@ the demo.
 | Search latency | N/A | ~1.0 to 1.3 seconds per query, measured |
 
 Two bounds on that first row. The client router enforces a 30-second floor on
-`stale`, so a navigating client can hold a copy for that long even though the
-server-side entry is already gone. And it only holds where a write triggers
+`stale`, the setting that governs how long a browser may reuse its own copy, so
+a navigating visitor can hold a record for that long even after the server-side
+entry is gone. And it only holds where a write triggers
 invalidation, which in production means the webhook from the Cache Components
 design, not the Server Action this demo uses.
 
@@ -429,18 +436,17 @@ Roughly in the order I'd want to deal with them.
    `app/error.tsx` gives the table: an explicit statement that search is
    unavailable, that this says nothing about any individual, and that the
    browse view still works. Nothing says that today.
-4. **The query text is interpolated into the prompt, so extraction can be
-   steered.** The handler builds the prompt around the user's query, which
-   means a crafted query can try to influence which filters come back. What
-   that can achieve is bounded by design rather than by detection: the model
-   can only emit the typed `Output.object`, only allowlisted fields become
-   predicates, and every value is bound as a parameter. The ceiling is a filter
-   combination the user didn't type, over records that are already public. It
-   can't reach `additional_details`, can't produce SQL, and can't surface a
-   record the page doesn't already list. The length cap limits how elaborate an
-   attempt can be, and showing the resolved filters is what keeps a steered
-   result visible rather than silent. Nothing detects the attempt itself, which
-   is the actual gap.
+4. **A crafted query could try to steer what the search looks for.** The
+   user's words become part of the prompt, so a query can be worded to
+   influence which filters come back. What that achieves is capped by design,
+   not by detection: the model can only emit the typed `Output.object`, only
+   allowlisted fields become predicates, and every value is bound as a
+   parameter. So the worst outcome is a filter combination the user didn't ask
+   for, over records that are already public. It can't reach
+   `additional_details`, can't produce SQL, and can't surface a record the page
+   doesn't already list. The length cap limits how elaborate an attempt can be,
+   and showing the resolved filters is what keeps a steered result visible
+   instead of silent. Nothing detects the attempt itself, which is the gap.
 5. **A database failure degrades to an error page, not to last-known-good data.**
    `app/error.tsx` scopes the failure to the page: the shell stays, the message
    is that records are temporarily unavailable, there's a retry, and it says

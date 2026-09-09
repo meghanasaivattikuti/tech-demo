@@ -54,3 +54,5 @@ db/rds-ca-bundle.pem
 # local tooling and generated artifacts, not part of the submission
 scripts/md-to-pdf.py
 SUBMISSION.pdf
+INTERVIEW-PREP.md
+INTERVIEW-PREP.pdf

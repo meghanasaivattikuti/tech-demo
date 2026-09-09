@@ -148,15 +148,35 @@ function safetyCriticalCacheLife() {
   cacheLife({ stale: 0, revalidate: 3600, expire: 86_400 });
 }
 
+// a cached function's body only runs on a miss, so this line is a direct
+// signal that the data was re-read instead of served from cache. a warm
+// render logs nothing, a cold one logs the index plus one per record, and a
+// targeted invalidation logs exactly one. that makes the per-record claim
+// observable in the runtime logs rather than something to take on trust.
+// deliberately not called from getRecordUncached, which is a straight read
+// and not a cache miss. same one-JSON-line-per-event shape as pdd.search
+function logCacheMiss(tag: string, startedAt: number): void {
+  console.log(
+    JSON.stringify({
+      event: "pdd.cache.miss",
+      tag,
+      durationMs: Date.now() - startedAt,
+    }),
+  );
+}
+
 export async function getRecordIndex(): Promise<string[]> {
   "use cache";
   cacheTag(RECORD_INDEX_TAG);
   safetyCriticalCacheLife();
 
+  const startedAt = Date.now();
   const connection = await pool();
   const result = await connection
     .request()
     .query<Pick<PDDRow, "id">>("SELECT id FROM dbo.pdd_records ORDER BY name ASC");
+
+  logCacheMiss(RECORD_INDEX_TAG, startedAt);
 
   return result.recordset.map((row) => row.id);
 }
@@ -168,11 +188,14 @@ export async function getRecord(id: string): Promise<PDDRecord | null> {
   cacheTag(recordTag(id));
   safetyCriticalCacheLife();
 
+  const startedAt = Date.now();
   const connection = await pool();
   const result = await connection
     .request()
     .input("id", sql.VarChar(32), id)
     .query<PDDRow>(`SELECT TOP (1) ${RECORD_COLUMNS} FROM dbo.pdd_records WHERE id = @id`);
+
+  logCacheMiss(recordTag(id), startedAt);
 
   return result.recordset.length > 0 ? toRecord(result.recordset[0]) : null;
 }

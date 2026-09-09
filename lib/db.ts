@@ -166,7 +166,14 @@ function logCacheMiss(tag: string, startedAt: number): void {
 }
 
 export async function getRecordIndex(): Promise<string[]> {
-  "use cache";
+  // remote, not plain "use cache". these reads sit behind connection(), so
+  // they're deferred to request time, and the docs are explicit that in a
+  // serverless environment each instance keeps its own in-memory cache and
+  // hit rates there are lowest. measured on the deployment: with plain
+  // "use cache" every request re-read all eleven entries, which is a 0% hit
+  // rate and defeats the entire per-record design. remote gives one shared
+  // cache across instances, at the cost of a lookup round trip
+  "use cache: remote";
   cacheTag(RECORD_INDEX_TAG);
   safetyCriticalCacheLife();
 
@@ -184,7 +191,7 @@ export async function getRecordIndex(): Promise<string[]> {
 // cached per record, own tag - a write to PDD-1005 invalidates
 // record-PDD-1005 only, the other nine stay cached
 export async function getRecord(id: string): Promise<PDDRecord | null> {
-  "use cache";
+  "use cache: remote";
   cacheTag(recordTag(id));
   safetyCriticalCacheLife();
 

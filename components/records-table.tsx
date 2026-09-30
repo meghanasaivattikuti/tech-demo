@@ -29,12 +29,23 @@ function actionVariant(actionTaken: string): "destructive" | "warning" | "second
 // screen-width scroll away, not gone
 const HIDDEN_ON_MOBILE = "hidden sm:table-cell";
 
-// deliberately no explicit min-width on Name/City/Action Taken - Card is a
-// flex column (components/ui/card.tsx) and CardContent is a flex item, so
-// an explicit min-width here doesn't stay contained to the table's own
-// overflow-x-auto scroll area, it forces the whole flex item - and with it
-// the whole page - wider on a phone. the table's own nowrap content already
-// establishes its natural min width; that stays scoped to the table
+// TableCell bakes whitespace-nowrap into every cell (components/ui/table.tsx),
+// which is what actually made this table unable to fit a phone: a nowrap cell
+// can't shrink below its own text, so the four visible columns had a hard
+// minimum width of roughly 480px no matter what the viewport was. worse, that
+// minimum only exists once the real rows arrive - the skeleton's placeholder
+// bars have no intrinsic width at all - so the table sized itself narrow while
+// loading and then jumped wider the moment data streamed in. letting these
+// cells wrap on mobile removes the hard minimum entirely, so there's no jump
+// and no sideways scrolling. nowrap comes back at sm and up, where the columns
+// have room to sit on one line anyway
+const WRAP_ON_MOBILE = "whitespace-normal sm:whitespace-nowrap";
+
+// no explicit min-width anywhere in here on purpose - Card is a flex column
+// (components/ui/card.tsx) and CardContent is a flex item, so a min-width set
+// on a cell does not stay contained to the table's own overflow-x-auto scroll
+// area. it forces the flex item, and with it the entire page, wider than the
+// screen on a phone
 export function RecordsTable({ children }: { children: ReactNode }) {
   return (
     <Table>
@@ -57,8 +68,8 @@ export function RecordsTable({ children }: { children: ReactNode }) {
 export function RecordRow({ record }: { record: PDDRecord }) {
   return (
     <TableRow>
-      <TableCell className="font-medium whitespace-nowrap">{record.name}</TableCell>
-      <TableCell className="whitespace-nowrap">{record.city}</TableCell>
+      <TableCell className={`font-medium ${WRAP_ON_MOBILE}`}>{record.name}</TableCell>
+      <TableCell className={WRAP_ON_MOBILE}>{record.city}</TableCell>
       <TableCell>
         <Badge variant="outline">{record.state}</Badge>
       </TableCell>
@@ -68,8 +79,16 @@ export function RecordRow({ record }: { record: PDDRecord }) {
       <TableCell className={`whitespace-nowrap ${HIDDEN_ON_MOBILE}`}>
         {record.misconduct}
       </TableCell>
-      <TableCell className="whitespace-nowrap">
-        <Badge variant={actionVariant(record.actionTaken)}>{record.actionTaken}</Badge>
+      <TableCell className={WRAP_ON_MOBILE}>
+        {/* Badge itself carries whitespace-nowrap and a fixed h-5, so it needs
+            both overridden or "Permanently Ineligible" keeps the cell from
+            shrinking and then gets clipped by the badge's overflow-hidden */}
+        <Badge
+          variant={actionVariant(record.actionTaken)}
+          className={`${WRAP_ON_MOBILE} h-auto sm:h-5`}
+        >
+          {record.actionTaken}
+        </Badge>
       </TableCell>
       <TableCell
         className={`max-w-xs text-sm text-muted-foreground whitespace-normal ${HIDDEN_ON_MOBILE}`}

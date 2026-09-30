@@ -1,10 +1,16 @@
-import { ChevronDown } from "lucide-react";
-import type { ReactNode } from "react";
+"use client";
 
-// plain <details>/<summary> rather than a client component with useState -
-// the "Raw model output" toggle in search-panel.tsx already uses the same
-// native element, and this needs no JS at all to open/close, so a server
-// component is enough
+import { ChevronDown } from "lucide-react";
+import { useState, type ReactNode } from "react";
+
+// a client component, not a plain server-rendered <details>, because
+// open={defaultOpen} as a literal prop means React re-asserts that fixed
+// value on every re-render of this component, not just the first one. any
+// later re-render - a Suspense boundary elsewhere resolving, hydration
+// reconciling, a parent re-rendering for an unrelated reason - would then
+// silently snap an open (or user-toggled) section back to defaultOpen. the
+// onToggle handler below keeps `open` synced to whatever the details
+// element's real current state is, so a re-render has nothing to correct
 export function CollapsibleCard({
   title,
   description,
@@ -16,9 +22,12 @@ export function CollapsibleCard({
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
+
   return (
     <details
-      open={defaultOpen}
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
       className="group/collapsible overflow-hidden rounded-xl bg-card text-sm text-card-foreground ring-1 ring-foreground/10"
     >
       <summary className="flex cursor-pointer items-start justify-between gap-2 px-4 py-4 select-none marker:content-none [&::-webkit-details-marker]:hidden">

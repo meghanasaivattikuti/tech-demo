@@ -35,7 +35,7 @@ export function SimulateUpdatePicker({ records }: { records: PDDRecord[] }) {
 
       <p className="text-sm text-muted-foreground">
         Look for <span className="font-medium text-foreground">{selected.name}</span> in
-        the table below - that row is the one that will change.
+        the table below - that row is the one that will change, once approved.
       </p>
 
       <dl className="grid gap-3 text-sm sm:grid-cols-3">
@@ -60,17 +60,14 @@ export function SimulateUpdatePicker({ records }: { records: PDDRecord[] }) {
 
       {/* keyed by id so switching records doesn't leave a stale success/error
           message from the previous one showing */}
-      <SimulateUpdateForm
-        key={selected.id}
-        recordId={selected.id}
-        currentActionTaken={selected.actionTaken}
-      />
+      <SimulateUpdateForm key={selected.id} recordId={selected.id} />
 
+      {/* static - the form above already carries its own confirmation, once
+          submitted, that persists until the next submission on its own */}
       <p className="text-xs text-muted-foreground">
-        Invalidates <span className="font-mono">record-{selected.id}</span> only. The
-        record index and the other nine records are not touched, which is the difference
-        between this and a blanket 300-second TTL where one change makes everything
-        stale at once.
+        Nothing is written to RDS until this is approved in Workflow run below. Once it
+        is, only that one record's cache tag is invalidated - the record index and the
+        other nine records are not touched.
       </p>
     </div>
   );

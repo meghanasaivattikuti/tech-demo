@@ -282,6 +282,140 @@ export async function applySanctionUpdate(
   return getRecordUncached(id);
 }
 
+export type AuditStatus = "pending" | "approved" | "rejected";
+
+export type AuditEntry = {
+  id: number;
+  recordId: string;
+  actionTaken: string;
+  status: AuditStatus;
+  changedAt: string;
+};
+
+// called synchronously from simulateSanctionUpdate (app/actions.ts), before
+// the approval workflow even starts - this is the proposed change, not a
+// record of one that already happened. OUTPUT INSERTED.id hands back the
+// new row's id so the workflow can attach a hook token to this exact entry
+export async function recordAuditEntry(
+  recordId: string,
+  actionTaken: string,
+): Promise<number> {
+  const connection = await pool();
+  const result = await connection
+    .request()
+    .input("recordId", sql.VarChar(32), recordId)
+    .input("actionTaken", sql.NVarChar(128), actionTaken)
+    .query<{ id: number }>(
+      `INSERT INTO dbo.pdd_record_audit (record_id, action_taken)
+       OUTPUT INSERTED.id
+       VALUES (@recordId, @actionTaken)`,
+    );
+
+  return result.recordset[0].id;
+}
+
+// the token is what reviewAuditEntry (app/actions.ts) needs to resume the
+// paused workflow run - stored on the row it belongs to rather than in a
+// separate table, since a demo doesn't need more than one hook per entry
+export async function saveAuditHookToken(auditId: number, token: string): Promise<void> {
+  const connection = await pool();
+  await connection
+    .request()
+    .input("id", sql.Int, auditId)
+    .input("token", sql.NVarChar(200), token)
+    .query("UPDATE dbo.pdd_record_audit SET hook_token = @token WHERE id = @id");
+}
+
+// hookToken can legitimately be null even for a still-pending row - either
+// it predates this feature, or the local dev workflow backend lost track
+// of the run across a restart. either way reviewAuditEntry still has to be
+// able to finalize the row directly, so the caller gets recordId and
+// actionTaken either way rather than this collapsing to a single null
+export async function getAuditEntryForReview(auditId: number): Promise<{
+  recordId: string;
+  actionTaken: string;
+  hookToken: string | null;
+} | null> {
+  const connection = await pool();
+  const result = await connection
+    .request()
+    .input("id", sql.Int, auditId)
+    .query<{ record_id: string; action_taken: string; hook_token: string | null }>(
+      "SELECT record_id, action_taken, hook_token FROM dbo.pdd_record_audit WHERE id = @id",
+    );
+
+  const row = result.recordset[0];
+  if (row === undefined) return null;
+
+  return {
+    recordId: row.record_id,
+    actionTaken: row.action_taken,
+    hookToken: row.hook_token,
+  };
+}
+
+// called from the workflow's last step, once the paused hook resolves with
+// a supervisor's decision
+export async function finalizeAuditEntry(
+  auditId: number,
+  approved: boolean,
+  comment: string,
+): Promise<void> {
+  const connection = await pool();
+  await connection
+    .request()
+    .input("id", sql.Int, auditId)
+    .input("status", sql.NVarChar(20), approved ? "approved" : "rejected")
+    .input("comment", sql.NVarChar(256), comment)
+    .query(
+      `UPDATE dbo.pdd_record_audit
+       SET status = @status, reviewed_at = SYSUTCDATETIME(), reviewer_comment = @comment,
+           hook_token = NULL
+       WHERE id = @id`,
+    );
+}
+
+// called when resuming a paused run times out (app/actions.ts) - a timeout
+// there is a strong signal the whole local workflow backend lost track of
+// its runs (typically a dev-server restart), not just this one entry's.
+// every other still-pending row is equally likely orphaned, so this clears
+// them out rather than letting them resurface one at a time as "the most
+// recent pending entry" once each newer one gets resolved
+export async function clearOtherPendingEntries(excludeAuditId: number): Promise<void> {
+  const connection = await pool();
+  await connection
+    .request()
+    .input("excludeId", sql.Int, excludeAuditId)
+    .query("DELETE FROM dbo.pdd_record_audit WHERE status = 'pending' AND id <> @excludeId");
+}
+
+// not cached - this list changes on every review action, and it's a small,
+// low-traffic panel, so there's nothing here worth a cache tag the way the
+// main records are
+export async function getPendingAuditEntries(): Promise<AuditEntry[]> {
+  const connection = await pool();
+  const result = await connection.request().query<{
+    id: number;
+    record_id: string;
+    action_taken: string;
+    status: string;
+    changed_at: Date;
+  }>(
+    `SELECT id, record_id, action_taken, status, changed_at
+     FROM dbo.pdd_record_audit
+     WHERE status = 'pending'
+     ORDER BY changed_at ASC`,
+  );
+
+  return result.recordset.map((row) => ({
+    id: row.id,
+    recordId: row.record_id,
+    actionTaken: row.action_taken,
+    status: row.status as AuditStatus,
+    changedAt: row.changed_at.toISOString(),
+  }));
+}
+
 // reads straight through, no cache - used right after a write so we see
 // what actually landed instead of a copy we just invalidated
 async function getRecordUncached(id: string): Promise<PDDRecord | null> {

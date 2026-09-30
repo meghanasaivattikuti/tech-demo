@@ -82,3 +82,63 @@ BEGIN
   INNER JOIN inserted AS i ON target.id = i.id;
 END
 GO
+
+-- one row per sanction-update workflow run, written by the audit step in
+-- workflows/sanction-update.ts. no FK to pdd_records - this is a demo and
+-- the point is to show the write surviving independently of the main row,
+-- not to enforce referential integrity
+IF OBJECT_ID(N'dbo.pdd_record_audit', N'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.pdd_record_audit (
+    id               INT IDENTITY(1,1) NOT NULL,
+    record_id        VARCHAR(32)       NOT NULL,
+
+    -- the proposed action_taken - not written to pdd_records until this
+    -- entry is approved, so there's nothing to revert on a reject: the
+    -- record was never touched in the first place
+    action_taken     NVARCHAR(128)     COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+
+    changed_at       DATETIME2(3)      NOT NULL
+                       CONSTRAINT DF_pdd_record_audit_changed_at DEFAULT SYSUTCDATETIME(),
+
+    -- the workflow run sits paused between writing this row and finalizing
+    -- it - status/hook_token are what that pause looks like in the
+    -- database while it's waiting on reviewAuditEntry to resume it
+    status           NVARCHAR(20)      COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
+                       CONSTRAINT DF_pdd_record_audit_status DEFAULT 'pending',
+    hook_token       NVARCHAR(200)     NULL,
+    reviewed_at      DATETIME2(3)      NULL,
+    reviewer_comment NVARCHAR(256)     COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+
+    CONSTRAINT PK_pdd_record_audit PRIMARY KEY CLUSTERED (id)
+  );
+END
+GO
+
+-- catches up an audit table created before the sign-off pause existed -
+-- COL_LENGTH is null for a column that isn't there yet, same idea as the
+-- OBJECT_ID/sys.indexes guards above, just for columns instead of objects
+IF COL_LENGTH(N'dbo.pdd_record_audit', N'status') IS NULL
+  ALTER TABLE dbo.pdd_record_audit ADD status NVARCHAR(20)
+    COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
+    CONSTRAINT DF_pdd_record_audit_status DEFAULT 'pending';
+GO
+
+IF COL_LENGTH(N'dbo.pdd_record_audit', N'hook_token') IS NULL
+  ALTER TABLE dbo.pdd_record_audit ADD hook_token NVARCHAR(200) NULL;
+GO
+
+IF COL_LENGTH(N'dbo.pdd_record_audit', N'reviewed_at') IS NULL
+  ALTER TABLE dbo.pdd_record_audit ADD reviewed_at DATETIME2(3) NULL;
+GO
+
+IF COL_LENGTH(N'dbo.pdd_record_audit', N'reviewer_comment') IS NULL
+  ALTER TABLE dbo.pdd_record_audit ADD reviewer_comment NVARCHAR(256)
+    COLLATE SQL_Latin1_General_CP1_CI_AS NULL;
+GO
+
+-- drops the column added for revert-on-reject - the write now only ever
+-- happens after approval, so there's nothing to revert and nothing to track
+IF COL_LENGTH(N'dbo.pdd_record_audit', N'previous_action_taken') IS NOT NULL
+  ALTER TABLE dbo.pdd_record_audit DROP COLUMN previous_action_taken;
+GO

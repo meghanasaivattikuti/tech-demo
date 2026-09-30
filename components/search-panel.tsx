@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import type { SearchFilters } from "@/lib/pdd-search";
 import type { SearchResponse, SearchTrace } from "@/lib/search-types";
+import { CollapsibleCard } from "@/components/collapsible-card";
 import { RecordRow, RecordsTable, RecordsTableEmpty } from "@/components/records-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -120,15 +121,12 @@ export function SearchPanel() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Search in plain language</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            The current public site requires you to already know which field your term
-            belongs to and its exact stored value. Type a sentence instead.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <CollapsibleCard
+        title="Search in plain language"
+        description="The current public site requires you to already know which field your term belongs to and its exact stored value. Type a sentence instead."
+        defaultOpen={false}
+      >
+        <div className="space-y-4">
           <form
             className="flex gap-2"
             onSubmit={(event) => {
@@ -174,8 +172,8 @@ export function SearchPanel() {
           <p role="status" aria-live="polite" className="sr-only">
             {statusMessage}
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </CollapsibleCard>
 
       {result !== null && <ResolvedQuery result={result} />}
 

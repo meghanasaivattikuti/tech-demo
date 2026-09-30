@@ -8,6 +8,7 @@ import {
   RecordsTable,
   RecordsTableEmpty,
 } from "@/components/records-table";
+import { PendingReviews } from "@/components/pending-reviews";
 import { SearchPanel } from "@/components/search-panel";
 import { SimulateUpdate } from "@/components/simulate-update";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +33,8 @@ export default function Home() {
         <SimulateUpdate />
       </Suspense>
 
+      <PendingReviews />
+
       <Card>
         <CardHeader>
           <CardTitle>All records</CardTitle>
@@ -49,9 +52,9 @@ export default function Home() {
 }
 
 // connection() holds this until a real request comes in, otherwise next
-// build would try to run these cached reads and hit RDS during the build,
-// which can't reach the database since the build container isn't on the
-// Secure Compute network
+// build would try to run these cached reads during the build itself,
+// which is the wrong time for it regardless of network reachability -
+// there's no real request to scope the cache read to yet
 async function PublishedRecords() {
   await connection();
 

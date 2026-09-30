@@ -11,12 +11,3 @@ export const ALLOWED_ACTIONS = [
 ] as const;
 
 export const ALLOWED_ACTIONS_SET: ReadonlySet<string> = new Set(ALLOWED_ACTIONS);
-
-const PERMANENT = "Permanently Ineligible";
-const PROBATION = "Probation, 2 years";
-
-// just a default the picker starts on, server still enforces
-// ALLOWED_ACTIONS regardless of what gets picked
-export function suggestNextAction(currentActionTaken: string): string {
-  return currentActionTaken === PERMANENT ? PROBATION : PERMANENT;
-}

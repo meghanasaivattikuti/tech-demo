@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withWorkflow } from "workflow/next";
 
 const nextConfig: NextConfig = {
   // page-level revalidate can't express per-record invalidation (it's one
@@ -14,4 +15,6 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["mssql"],
 };
 
-export default nextConfig;
+// enables the 'use workflow' / 'use step' directives used by
+// workflows/sanction-update.ts
+export default withWorkflow(nextConfig);

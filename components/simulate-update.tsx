@@ -1,8 +1,8 @@
 import { connection } from "next/server";
 
 import { getRecord, getRecordIndex } from "@/lib/db";
+import { CollapsibleCard } from "@/components/collapsible-card";
 import { SimulateUpdatePicker } from "@/components/simulate-update-picker";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 // fetches all ten records through the same cached getRecord() the table
 // uses, so this is free once the table's already rendered, then hands them
@@ -18,17 +18,12 @@ export async function SimulateUpdate() {
   if (records.length === 0) return null;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Simulate a change in the system of record</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Pick any record below, write a new sanction directly to RDS, then invalidate
-          one cache tag. Everything else keeps serving from cache.
-        </p>
-      </CardHeader>
-      <CardContent>
-        <SimulateUpdatePicker records={records} />
-      </CardContent>
-    </Card>
+    <CollapsibleCard
+      title="Simulate a change in the system of record"
+      description="Pick any record below and propose a new sanction. Nothing is written to RDS until it's approved in Workflow run."
+      defaultOpen={false}
+    >
+      <SimulateUpdatePicker records={records} />
+    </CollapsibleCard>
   );
 }

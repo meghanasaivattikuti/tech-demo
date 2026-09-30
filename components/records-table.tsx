@@ -29,17 +29,29 @@ function actionVariant(actionTaken: string): "destructive" | "warning" | "second
 // screen-width scroll away, not gone
 const HIDDEN_ON_MOBILE = "hidden sm:table-cell";
 
+// widest real values in this data set are ~18-22 characters (a name like
+// "Theodore Kowalczyk", an action like "Permanently Ineligible") and none of
+// these columns wrap, so without a floor here the header (rendered
+// immediately) sizes the column to its own short label, the loading
+// skeleton fits that narrow width, and then the real row - which can't be
+// narrower than its longest word - forces the column wider the moment it
+// streams in. Fixing the width on the header, which paints before the
+// Suspense fallback ever does, means there's nothing left to snap to later
+const NAME_COLUMN_WIDTH = "min-w-[16ch]";
+const CITY_COLUMN_WIDTH = "min-w-[10ch]";
+const ACTION_COLUMN_WIDTH = "min-w-[20ch]";
+
 export function RecordsTable({ children }: { children: ReactNode }) {
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Name</TableHead>
-          <TableHead>City</TableHead>
+          <TableHead className={NAME_COLUMN_WIDTH}>Name</TableHead>
+          <TableHead className={CITY_COLUMN_WIDTH}>City</TableHead>
           <TableHead>State</TableHead>
           <TableHead className={HIDDEN_ON_MOBILE}>Sport Affiliation(s)</TableHead>
           <TableHead className={HIDDEN_ON_MOBILE}>Misconduct</TableHead>
-          <TableHead>Action Taken</TableHead>
+          <TableHead className={ACTION_COLUMN_WIDTH}>Action Taken</TableHead>
           <TableHead className={HIDDEN_ON_MOBILE}>Additional Details</TableHead>
         </TableRow>
       </TableHeader>

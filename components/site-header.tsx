@@ -14,7 +14,7 @@ export function SiteHeader() {
         </div>
       </div>
       <div className="border-b border-border bg-muted/40">
-        <div className="mx-auto flex max-w-6xl items-center gap-4 px-6 py-2 text-xs text-muted-foreground">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 px-6 py-2 text-xs text-muted-foreground">
           <Link href="/" className="hover:text-foreground hover:underline">
             Public Disciplinary Database
           </Link>

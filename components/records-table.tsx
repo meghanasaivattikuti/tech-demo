@@ -22,6 +22,13 @@ function actionVariant(actionTaken: string): "destructive" | "warning" | "second
   return "secondary";
 }
 
+// Sport Affiliation, Misconduct and Additional Details are hidden below
+// sm - on a phone those three plus Name/City/State/Action Taken forced
+// horizontal scrolling just to see who a row was even about. Name, City,
+// State and Action Taken alone fit without scrolling; the rest are one
+// screen-width scroll away, not gone
+const HIDDEN_ON_MOBILE = "hidden sm:table-cell";
+
 export function RecordsTable({ children }: { children: ReactNode }) {
   return (
     <Table>
@@ -30,10 +37,10 @@ export function RecordsTable({ children }: { children: ReactNode }) {
           <TableHead>Name</TableHead>
           <TableHead>City</TableHead>
           <TableHead>State</TableHead>
-          <TableHead>Sport Affiliation(s)</TableHead>
-          <TableHead>Misconduct</TableHead>
+          <TableHead className={HIDDEN_ON_MOBILE}>Sport Affiliation(s)</TableHead>
+          <TableHead className={HIDDEN_ON_MOBILE}>Misconduct</TableHead>
           <TableHead>Action Taken</TableHead>
-          <TableHead>Additional Details</TableHead>
+          <TableHead className={HIDDEN_ON_MOBILE}>Additional Details</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>{children}</TableBody>
@@ -49,12 +56,18 @@ export function RecordRow({ record }: { record: PDDRecord }) {
       <TableCell>
         <Badge variant="outline">{record.state}</Badge>
       </TableCell>
-      <TableCell className="whitespace-nowrap">{record.sportAffiliation}</TableCell>
-      <TableCell className="whitespace-nowrap">{record.misconduct}</TableCell>
+      <TableCell className={`whitespace-nowrap ${HIDDEN_ON_MOBILE}`}>
+        {record.sportAffiliation}
+      </TableCell>
+      <TableCell className={`whitespace-nowrap ${HIDDEN_ON_MOBILE}`}>
+        {record.misconduct}
+      </TableCell>
       <TableCell className="whitespace-nowrap">
         <Badge variant={actionVariant(record.actionTaken)}>{record.actionTaken}</Badge>
       </TableCell>
-      <TableCell className="max-w-xs text-sm text-muted-foreground whitespace-normal">
+      <TableCell
+        className={`max-w-xs text-sm text-muted-foreground whitespace-normal ${HIDDEN_ON_MOBILE}`}
+      >
         {record.additionalDetails ?? ""}
       </TableCell>
     </TableRow>
@@ -66,11 +79,27 @@ export function RecordRow({ record }: { record: PDDRecord }) {
 export function RecordRowSkeleton() {
   return (
     <TableRow>
-      {Array.from({ length: 7 }).map((_, index) => (
-        <TableCell key={index}>
-          <div className="h-4 w-full animate-pulse rounded bg-muted" />
-        </TableCell>
-      ))}
+      <TableCell>
+        <div className="h-4 w-full animate-pulse rounded bg-muted" />
+      </TableCell>
+      <TableCell>
+        <div className="h-4 w-full animate-pulse rounded bg-muted" />
+      </TableCell>
+      <TableCell>
+        <div className="h-4 w-full animate-pulse rounded bg-muted" />
+      </TableCell>
+      <TableCell className={HIDDEN_ON_MOBILE}>
+        <div className="h-4 w-full animate-pulse rounded bg-muted" />
+      </TableCell>
+      <TableCell className={HIDDEN_ON_MOBILE}>
+        <div className="h-4 w-full animate-pulse rounded bg-muted" />
+      </TableCell>
+      <TableCell>
+        <div className="h-4 w-full animate-pulse rounded bg-muted" />
+      </TableCell>
+      <TableCell className={HIDDEN_ON_MOBILE}>
+        <div className="h-4 w-full animate-pulse rounded bg-muted" />
+      </TableCell>
     </TableRow>
   );
 }

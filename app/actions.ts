@@ -70,6 +70,9 @@ export async function simulateSanctionUpdate(
     if (current === null) {
       return { ok: false, error: "Record not found." };
     }
+    if (current.actionTaken === actionTaken) {
+      return { ok: false, error: `${recordId} already has ${actionTaken} as its action taken.` };
+    }
 
     // this is the proposal, not the write - pdd_records is untouched until
     // reviewAuditEntry approves it. written synchronously (not a workflow

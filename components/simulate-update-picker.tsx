@@ -33,30 +33,35 @@ export function SimulateUpdatePicker({ records }: { records: PDDRecord[] }) {
         </select>
       </div>
 
-      <p className="text-sm text-muted-foreground">
-        Look for <span className="font-medium text-foreground">{selected.name}</span> in
-        the table below - that row is the one that will change, once approved.
-      </p>
+      {/* grouped in its own bordered box, separate from the form below, so
+          "here's the record as it stands today" reads as one clear step
+          before "here's the change being proposed" */}
+      <div className="space-y-3 rounded-md border border-border p-3">
+        <p className="text-sm text-muted-foreground">
+          Look for <span className="font-medium text-foreground">{selected.name}</span>{" "}
+          in the table below - that row is the one that will change, once approved.
+        </p>
 
-      <dl className="grid gap-3 text-sm sm:grid-cols-3">
-        <div>
-          <dt className="text-muted-foreground">Record</dt>
-          <dd>
-            <span className="font-medium">{selected.name}</span>
-            <span className="block font-mono text-xs text-muted-foreground">
-              {selected.id} &middot; {selected.city}, {selected.state}
-            </span>
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Current action taken</dt>
-          <dd className="font-medium">{selected.actionTaken}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Last written to the database</dt>
-          <dd className="font-mono text-xs">{selected.updatedAt}</dd>
-        </div>
-      </dl>
+        <dl className="grid gap-3 text-sm sm:grid-cols-3">
+          <div>
+            <dt className="text-muted-foreground">Record</dt>
+            <dd>
+              <span className="font-medium">{selected.name}</span>
+              <span className="block font-mono text-xs text-muted-foreground">
+                {selected.id} &middot; {selected.city}, {selected.state}
+              </span>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Current action taken</dt>
+            <dd className="font-medium">{selected.actionTaken}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Last written to the database</dt>
+            <dd className="font-mono text-xs">{selected.updatedAt}</dd>
+          </div>
+        </dl>
+      </div>
 
       {/* keyed by id so switching records doesn't leave a stale success/error
           message from the previous one showing */}

@@ -31,50 +31,55 @@ export function SimulateUpdateForm({ recordId }: { recordId: string }) {
   }, [state]);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+    <form action={formAction} className="space-y-3">
       <input type="hidden" name="recordId" value={recordId} />
 
-      <div className="space-y-1.5">
-        <label htmlFor={`action-${recordId}`} className="text-sm text-muted-foreground">
-          New action taken
-        </label>
-        {/* select, not free text - this is a public write path, six known
-            values is exactly what the server will accept anyway. starts
-            empty and required so a submission always reflects something
-            actually picked, not a suggested default nobody looked at */}
-        <select
-          id={`action-${recordId}`}
-          name="actionTaken"
-          required
-          defaultValue=""
-          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:w-56"
-        >
-          <option value="" disabled>
-            Select an action
-          </option>
-          {ALLOWED_ACTIONS.map((action) => (
-            <option key={action} value={action}>
-              {action}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="space-y-1.5">
+          <label htmlFor={`action-${recordId}`} className="text-sm text-muted-foreground">
+            New action taken
+          </label>
+          {/* select, not free text - this is a public write path, six known
+              values is exactly what the server will accept anyway. starts
+              empty and required so a submission always reflects something
+              actually picked, not a suggested default nobody looked at */}
+          <select
+            id={`action-${recordId}`}
+            name="actionTaken"
+            required
+            defaultValue=""
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:w-56"
+          >
+            <option value="" disabled>
+              Select an action
             </option>
-          ))}
-        </select>
+            {ALLOWED_ACTIONS.map((action) => (
+              <option key={action} value={action}>
+                {action}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <Button type="submit" disabled={isPending}>
+          {isPending ? "Submitting..." : "Simulate: sanction updated"}
+        </Button>
       </div>
 
-      <Button type="submit" disabled={isPending}>
-        {isPending ? "Submitting..." : "Simulate: sanction updated"}
-      </Button>
-
+      {/* own line, not squeezed next to the button - the message can run
+          long (it names the record and the proposed action), so sharing a
+          row with the button just forces an awkward wrap */}
       {state !== null && state.ok && (
-        <span className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Submitted for approval. {recordId} will become{" "}
           <span className="font-medium text-foreground">{state.actionTaken}</span> once
           approved. Approve or reject it in Workflow run below.
-        </span>
+        </p>
       )}
       {state !== null && !state.ok && (
-        <span className="text-sm text-destructive" role="alert">
+        <p className="text-sm text-destructive" role="alert">
           {state.error}
-        </span>
+        </p>
       )}
     </form>
   );

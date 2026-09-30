@@ -38,7 +38,9 @@ To see it working, submit an update from the homepage, then approve or reject it
 
 Caching is handled with **Cache Components**, enabled via `cacheComponents: true` in `next.config.ts`, and each record gets its own `cacheTag`/`cacheLife` pair through `"use cache: remote"` in `lib/db.ts`, so a write to one record invalidates only that record instead of the whole page or the other nine.
 
-The search endpoint in `app/api/search/route.ts` calls a model through **AI Gateway** using a provider-prefixed model string rather than a provider SDK directly, which is what gives it failover and per-call cost tracking.
+The search endpoint in `app/api/search/route.ts` uses the **AI SDK**'s `generateText` with a structured `Output` schema to turn a plain-language query directly into the filter object the search runs on, instead of hand-parsing the model's response.
+
+That same call goes through **AI Gateway**, via a provider-prefixed model string rather than a provider SDK directly, which is what gives it failover and per-call cost tracking.
 
 The sanction-update path runs through **Workflows**, as described above, so the actual approval gate is a durable, resumable pause rather than a write that already happened by the time anyone reviews it.
 
